@@ -50,6 +50,8 @@ contract Crowdfunding {
         uint256 amount
     );
 
+    event GiftFromContract(address indexed to, uint256 amount);
+
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
         _;
@@ -148,6 +150,17 @@ contract Crowdfunding {
         require(ok, "Treasury withdraw failed");
     }
 
+    function giftFromContract(address _to, uint256 _amount) external onlyOwner {
+        require(_to != address(0), "Invalid address");
+        require(_amount > 0, "Invalid amount");
+        require(address(this).balance >= _amount, "Not enough balance");
+
+        (bool ok, ) = _to.call{value: _amount}("");
+        require(ok, "Gift failed");
+
+        emit GiftFromContract(_to, _amount);
+    }
+
     function getCampaign(
         uint256 _id
     )
@@ -168,4 +181,6 @@ contract Crowdfunding {
     function getCampaignCount() external view returns (uint256) {
         return campaigns.length;
     }
+
+    receive() external payable {}
 }
