@@ -1,0 +1,39 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-0bbd17bd6b5ddc46750514598fb44fbe7af587b8",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "userSourceNameMap": {
+    "contracts/Crowdfunding.sol": "project/contracts/Crowdfunding.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/Crowdfunding.sol": {
+        "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.28;\n\ncontract Crowdfunding {\n    address public owner;\n\n    constructor() {\n        owner = msg.sender;\n    }\n\n    uint256 public creationFee = 0.001 ether;\n    uint256 public contributionFee = 0.002 ether;\n\n    struct Campaign {\n        address creator;\n        uint256 goal;\n        uint256 deadline;\n        uint256 totalFunded;\n        bool claimed;\n    }\n\n    Campaign[] public campaigns;\n    mapping(uint256 => mapping(address => uint256)) public contributions;\n\n    uint256 public treasury;\n\n    // EVENTS\n    event CampaignCreated(\n        uint256 indexed id,\n        address indexed creator,\n        uint256 goal,\n        uint256 deadline\n    );\n\n    event Contributed(\n        uint256 indexed id,\n        address indexed contributor,\n        uint256 amount\n    );\n\n    event Withdrawn(\n        uint256 indexed id,\n        address indexed creator,\n        uint256 amount\n    );\n\n    event Refunded(\n        uint256 indexed id,\n        address indexed contributor,\n        uint256 amount\n    );\n\n    modifier onlyOwner() {\n        require(msg.sender == owner, \"Not owner\");\n        _;\n    }\n\n    function setCreationFee(uint256 _fee) external onlyOwner {\n        creationFee = _fee;\n    }\n\n    function setContributionFee(uint256 _fee) external onlyOwner {\n        contributionFee = _fee;\n    }\n\n    function createCampaign(\n        uint256 _goal,\n        uint256 _durationInSeconds\n    ) external payable {\n        require(msg.value >= creationFee, \"Fee not paid\");\n        require(_goal > 0, \"Invalid goal\");\n        require(_durationInSeconds > 0, \"Invalid duration\");\n\n        treasury += creationFee;\n\n        uint256 deadline = block.timestamp + _durationInSeconds;\n\n        campaigns.push(\n            Campaign({\n                creator: msg.sender,\n                goal: _goal,\n                deadline: deadline,\n                totalFunded: 0,\n                claimed: false\n            })\n        );\n\n        emit CampaignCreated(campaigns.length - 1, msg.sender, _goal, deadline);\n    }\n\n    function contribute(uint256 _id) external payable {\n        require(_id < campaigns.length, \"Invalid id\");\n\n        Campaign storage c = campaigns[_id];\n        require(block.timestamp < c.deadline, \"Ended\");\n        require(msg.value > contributionFee, \"Insufficient\");\n\n        uint256 donateAmount = msg.value - contributionFee;\n\n        c.totalFunded += donateAmount;\n        contributions[_id][msg.sender] += donateAmount;\n\n        treasury += contributionFee;\n\n        emit Contributed(_id, msg.sender, donateAmount);\n    }\n\n    function withdraw(uint256 _id) external {\n        Campaign storage c = campaigns[_id];\n\n        require(msg.sender == c.creator, \"Not creator\");\n        require(block.timestamp >= c.deadline, \"Not ended\");\n        require(c.totalFunded >= c.goal, \"Goal not reached\");\n        require(!c.claimed, \"Already claimed\");\n\n        c.claimed = true;\n\n        uint256 amount = c.totalFunded;\n\n        (bool ok, ) = msg.sender.call{value: amount}(\"\");\n        require(ok, \"Transfer failed\");\n\n        emit Withdrawn(_id, msg.sender, amount);\n    }\n\n    function refund(uint256 _id) external {\n        Campaign storage c = campaigns[_id];\n\n        require(block.timestamp >= c.deadline, \"Not ended\");\n        require(c.totalFunded < c.goal, \"Goal reached\");\n\n        uint256 contributed = contributions[_id][msg.sender];\n        require(contributed > 0, \"Nothing\");\n\n        contributions[_id][msg.sender] = 0;\n\n        (bool ok, ) = msg.sender.call{value: contributed}(\"\");\n        require(ok, \"Refund failed\");\n\n        emit Refunded(_id, msg.sender, contributed);\n    }\n\n    function withdrawTreasury() external onlyOwner {\n        uint256 amount = treasury;\n        treasury = 0;\n\n        (bool ok, ) = owner.call{value: amount}(\"\");\n        require(ok, \"Treasury withdraw failed\");\n    }\n\n    function getCampaign(\n        uint256 _id\n    )\n        external\n        view\n        returns (\n            address creator,\n            uint256 goal,\n            uint256 deadline,\n            uint256 totalFunded,\n            bool claimed\n        )\n    {\n        Campaign storage c = campaigns[_id];\n        return (c.creator, c.goal, c.deadline, c.totalFunded, c.claimed);\n    }\n\n    function getCampaignCount() external view returns (uint256) {\n        return campaigns.length;\n    }\n}\n"
+      }
+    }
+  }
+}
